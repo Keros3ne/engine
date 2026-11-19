@@ -1,0 +1,52 @@
+{
+	"name": "@keros3ne/engine",
+	"version": "0.7.0",
+	"private": false,
+	"type": "module",
+	"description": "Plays a studio's game from its books: the rules every bet is held to, a round opened, drawn and settled, and a bet checked from its seeds.",
+	"exports": {
+		"./answers": "./src/answers.ts",
+		"./bets": "./src/bets.ts",
+		"./book": "./src/book.ts",
+		"./book-check": "./src/book-check.ts",
+		"./book-files": "./src/book-files.ts",
+		"./book-game": "./src/book-game.ts",
+		"./book-round": "./src/book-round.ts",
+		"./frame": "./src/frame.ts",
+		"./game-failed": "./src/game-failed.ts",
+		"./game-manifest": "./src/game-manifest.ts",
+		"./guide": "./src/guide.ts",
+		"./kero": "./src/kero.ts",
+		"./limits": "./src/limits.ts",
+		"./listing": "./src/listing.ts",
+		"./maths": "./src/maths.ts",
+		"./play": "./src/play.ts",
+		"./proofs": "./src/proofs.ts",
+		"./protocol": "./src/protocol.ts",
+		"./rng": "./src/rng.ts",
+		"./serve": "./src/serve.ts",
+		"./shapes": "./src/shapes.ts",
+		"./stake-steps": "./src/stake-steps.ts",
+		"./stand-in": "./src/stand-in.ts",
+		"./verify": "./src/verify.ts",
+		"./verify-books": "./src/verify-books.ts"
+	},
+	"scripts": {
+		"test": "bun --bun vitest --run",
+		"typecheck": "tsc --noEmit",
+		"format": "prettier --write .",
+		"lint": "prettier --check ."
+	},
+	"dependencies": {
+		"@noble/hashes": "^2.4.0",
+		"valibot": "^1.5.0"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.4",
+		"@types/node": "^22",
+		"prettier": "^3.10.1",
+		"prettier-plugin-svelte": "^4.1.1",
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.8"
+	}
+}
