@@ -50,7 +50,7 @@ export interface RoundMaths {
 }
 
 /** A round game, asked in this process. */
-function inProcess(game: AnyRound): RoundMaths {
+export function inProcess(game: AnyRound): RoundMaths {
 	const answers = answer(game);
 
 	return {

@@ -20,6 +20,8 @@
 		"./limits": "./src/limits.ts",
 		"./listing": "./src/listing.ts",
 		"./maths": "./src/maths.ts",
+		"./memory": "./src/memory.ts",
+		"./pipeline": "./src/pipeline.ts",
 		"./play": "./src/play.ts",
 		"./proofs": "./src/proofs.ts",
 		"./protocol": "./src/protocol.ts",
