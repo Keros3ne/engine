@@ -1,9 +1,9 @@
 {
 	"name": "@keros3ne/engine",
 	"version": "0.7.0",
-	"private": false,
 	"type": "module",
 	"description": "Plays a studio's game from its books: the rules every bet is held to, a round opened, drawn and settled, and a bet checked from its seeds.",
+	"license": "MIT",
 	"exports": {
 		"./answers": "./src/answers.ts",
 		"./bets": "./src/bets.ts",
@@ -50,5 +50,9 @@
 		"prettier-plugin-svelte": "^4.1.1",
 		"typescript": "^6.0.3",
 		"vitest": "^4.1.8"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Keros3ne/engine.git"
 	}
 }
