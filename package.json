@@ -13,6 +13,7 @@
 		"./book-game": "./src/book-game.ts",
 		"./book-round": "./src/book-round.ts",
 		"./bridge.svelte": "./src/bridge.svelte.ts",
+		"./client": "./src/client.ts",
 		"./frame": "./src/frame.ts",
 		"./game-failed": "./src/game-failed.ts",
 		"./game-manifest": "./src/game-manifest.ts",
@@ -34,7 +35,8 @@
 		"./stand-in": "./src/stand-in.ts",
 		"./verify": "./src/verify.ts",
 		"./verify-books": "./src/verify-books.ts",
-		"./GameFrame.svelte": "./src/GameFrame.svelte"
+		"./GameFrame.svelte": "./src/GameFrame.svelte",
+		"./Views.svelte": "./src/Views.svelte"
 	},
 	"scripts": {
 		"test": "bun --bun vitest --run",
