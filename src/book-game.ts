@@ -29,7 +29,13 @@ import {
 	type RoundStep,
 	type RowProof
 } from "./book-round.ts";
-import { BOOK_RTP_BP, booksSummary, gameManifest } from "./game-manifest.ts";
+import { convertThrough } from "./counter-conversion.ts";
+import {
+	BOOK_RTP_BP,
+	booksSummary,
+	gameManifest,
+	type GameManifest
+} from "./game-manifest.ts";
 import type { RoundGame } from "./maths.ts";
 import { createRng, payoutRoll, type Rng } from "./rng.ts";
 
@@ -384,6 +390,8 @@ export function verifyBookBet(
 /** A settled bet as a history lists it: enough to follow what was held from bet to bet. */
 export interface BookBetInHistory {
 	id: string;
+	/** The version of the game it was played on, where the site keeps versions. */
+	version?: string;
 	baseStake: number;
 	state: unknown;
 	result: unknown;
@@ -401,13 +409,21 @@ export interface BookBetInHistory {
  * here needs a seed, so a bet still sealed is checked too. The oldest bet listed at each
  * size has no bet before it in the list, and is taken at its word. A game with no
  * counters has nothing to follow.
+ *
+ * A game may have been updated between two bets. `versions` are then its manifests,
+ * oldest first: what the earlier bet left is carried into the later bet's version as the
+ * game's own conversions say (./counter-conversion.ts), and the later bet is held to that.
  */
 export function brokenHolds(
 	listing: BookListing,
-	bets: readonly BookBetInHistory[]
+	bets: readonly BookBetInHistory[],
+	versions: readonly GameManifest[] = []
 ): string[] {
-	const counters = listing.game.counters;
-	if (!counters) return [];
+	/** The game as it was at the version a bet was played on: the listing's own, unless another is known. */
+	const rulesOf = (bet: BookBetInHistory): GameManifest =>
+		versions.find((each) => each.version === bet.version) ?? listing.game;
+
+	if (!listing.game.counters && !versions.some((each) => each.counters)) return [];
 
 	const broken: string[] = [];
 
@@ -417,11 +433,23 @@ export function brokenHolds(
 			.find((each) => each.baseStake === bet.baseStake);
 		if (!before) return;
 
+		const rules = rulesOf(bet);
+		const counters = rules.counters ?? [];
 		const held = (bet.state as BookState | null)?.held ?? {};
-		const left = startingCounters({
-			rules: listing.game,
-			held: (before.result as BookResult | null)?.counters ?? {}
-		});
+		const kept = (before.result as BookResult | null)?.counters ?? {};
+		// What the bet before left, in this bet's version of the game.
+		const carried =
+			before.version !== bet.version
+				? convertThrough(
+						versions.slice(
+							0,
+							versions.findIndex((each) => each.version === bet.version) + 1
+						),
+						before.version,
+						kept
+					)
+				: kept;
+		const left = startingCounters({ rules, held: carried });
 		const follows =
 			Object.keys(held).length === counters.length &&
 			counters.every((counter) => held[counter.id] === left[counter.id]);

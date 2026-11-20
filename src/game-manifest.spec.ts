@@ -21,8 +21,7 @@ import {
 	fillsFor,
 	missingTables,
 	modeOf,
-	releaseOf,
-	releaseTag
+	versionAfter
 } from "./game-manifest.ts";
 
 const folder = mkdtempSync(join(tmpdir(), "keros3ne-game-"));
@@ -81,7 +80,7 @@ describe("a game's manifest", () => {
 		expect(refused({ rtpBp: 9_700 })).toThrow(/rtpBp/);
 	});
 
-	it("says its own version, and is released under a tag made of its slug and that", () => {
+	it("says its own version, three numbers that are put in order as numbers", () => {
 		expect(checkGameManifest("a game", game).version).toBe("1.0.0");
 
 		const { version: _none, ...unversioned } = game;
@@ -91,23 +90,43 @@ describe("a game's manifest", () => {
 				/three numbers/
 			);
 
-		expect(releaseTag("stormglass", "1.4.0")).toBe("stormglass-v1.4.0");
-		expect(releaseOf("stormglass-v1.4.0")).toEqual({
-			slug: "stormglass",
-			version: "1.4.0"
+		expect(versionAfter("1.10.0", "1.9.3")).toBe(true);
+		expect(versionAfter("2.0.0", "1.99.99")).toBe(true);
+		expect(versionAfter("1.4.0", "1.4.0")).toBe(false);
+		expect(versionAfter("1.3.9", "1.4.0")).toBe(false);
+	});
+
+	it("may say how the counters of the version before become its own", () => {
+		const metered = {
+			...game,
+			version: "1.1.0",
+			counters: [{ id: "bronze", full: 55, worthBp: 2000, table: "spin" }]
+		};
+		const converts =
+			(counters: Record<string, unknown>, from = "1.0.0") =>
+			() =>
+				checkGameManifest("a game", { ...metered, converts: { from, counters } });
+
+		expect(
+			converts({ copper: { to: "bronze", times: 11, over: 10 } })().converts
+		).toEqual({
+			from: "1.0.0",
+			counters: { copper: { to: "bronze", times: 11, over: 10 } }
 		});
-		// A slug may itself hold "-v": the version is what follows the last.
-		expect(releaseOf("the-vault-v2.0.10")).toEqual({
-			slug: "the-vault",
-			version: "2.0.10"
-		});
-		for (const tag of [
-			"v1.4.0",
-			"stormglass-1.4.0",
-			"stormglass-v1.4",
-			"Storm-v1.0.0"
-		])
-			expect(releaseOf(tag)).toBeNull();
+		expect(converts({ copper: { to: "silver", times: 1, over: 1 } })).toThrow(
+			/a counter the game does not have/
+		);
+		expect(
+			converts({
+				copper: { to: "bronze", times: 1, over: 1 },
+				tin: { to: "bronze", times: 1, over: 1 }
+			})
+		).toThrow(/into the same one/);
+		expect(converts({ copper: { to: "bronze", times: 1.5, over: 1 } })).toThrow(
+			/whole number/
+		);
+		expect(converts({ copper: { to: "bronze", times: 1, over: 0 } })).toThrow();
+		expect(converts({}, "1.1.0")).toThrow(/a version before its own/);
 	});
 
 	it("may say what its bar moves the bet by, in bands from the smallest bets up", () => {

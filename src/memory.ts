@@ -34,7 +34,7 @@ interface Snapshot {
 	nonce: number;
 	pair: number;
 	bets: KeptBet[];
-	progress: [string, unknown][];
+	progress: [string, { state: unknown; version?: string }][];
 }
 
 const stored = <T>(value: T): T => JSON.parse(JSON.stringify(value ?? null));
@@ -57,7 +57,7 @@ export function createMemoryStore(options: { balance?: number } = {}) {
 	let pair = 0;
 	let made = 0;
 	let bets: KeptBet[] = [];
-	const progress = new Map<string, unknown>();
+	const progress = new Map<string, { state: unknown; version?: string }>();
 
 	const seedsAt = (at: number): Seeds => ({ serverSeed, clientSeed, nonce: at });
 	const meter = (game: string, stake: number) => `${game} ${stake}`;
@@ -98,6 +98,7 @@ export function createMemoryStore(options: { balance?: number } = {}) {
 					id: found.id,
 					userId: found.userId,
 					game: found.game,
+					...(found.version !== undefined ? { version: found.version } : {}),
 					stake: found.stake,
 					baseStake: found.baseStake,
 					nonce: found.nonce,
@@ -136,8 +137,11 @@ export function createMemoryStore(options: { balance?: number } = {}) {
 			return progress.get(meter(game, stake));
 		},
 
-		async keepProgress(_userId, game, stake, state) {
-			progress.set(meter(game, stake), stored(state));
+		async keepProgress(_userId, game, stake, state, _now, version) {
+			progress.set(meter(game, stake), {
+				state: stored(state),
+				...(version !== undefined ? { version } : {})
+			});
 		}
 	};
 

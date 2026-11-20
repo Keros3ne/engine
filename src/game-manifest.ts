@@ -16,9 +16,15 @@
  *   }
  *
  * - `version` is the game's own, three numbers with points between: a game is released by
- *   itself, at its version, whatever else its repository holds, and a release of it is
- *   named for the two (`stormglass-v1.4.0`, `releaseTag`). It is raised to release the
- *   game again, and is no part of how the game plays.
+ *   itself, at its version, whatever else its studio makes. It is raised to release the
+ *   game again, and is no part of how the game plays. A site keeps every version it has
+ *   played: a bet records the version it was played on.
+ * - `converts`, if given, says how what a player held in the counters of the version before
+ *   becomes what they hold in this one's (./counter-conversion.ts):
+ *   `{ "from": "1.3.0", "counters": { "bronze": { "to": "bronze", "times": 11, "over": 10 } } }`
+ *   A player holding `u` units of the old `bronze` holds `u` times 11 over 10, rounded up,
+ *   of the new. It is needed only where the counters changed, and a site takes it only if
+ *   nobody is left holding less than they held.
  * - `modes` are the ways of opening a round, the ordinary one first: what each costs, as
  *   a multiple of the bet in basis points, a whole number of bets (20000, never 12500:
  *   a cost must come to whole cents at every bet), and the table its row is drawn from. A game
@@ -190,26 +196,37 @@ const setKey = (ids: readonly string[]) => [...ids].sort().join(" ");
 /** A game's version as its manifest writes it: `1.4.0`. */
 export const GAME_VERSION = /^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$/;
 
-/** The tag a release of a game is named by: its slug and its version, `stormglass-v1.4.0`. */
-export function releaseTag(slug: string, version: string): string {
-	return `${slug}-v${version}`;
+/** Whether one version comes after another: `1.10.0` after `1.9.3`. */
+export function versionAfter(version: string, other: string): boolean {
+	const parts = (text: string) => text.split(".").map(Number);
+	const [a, b] = [parts(version), parts(other)];
+
+	for (let at = 0; at < 3; at++) if (a[at] !== b[at]) return a[at] > b[at];
+
+	return false;
 }
 
-/**
- * The game and the version a release's tag names, or `null` for a tag that is not one a
- * game is released by.
- */
-export function releaseOf(tag: string): { slug: string; version: string } | null {
-	const at = tag.lastIndexOf("-v");
-	if (at <= 0) return null;
+/** The most a conversion may multiply or divide a counter's units by. */
+export const CONVERT_MAX_FACTOR = 1_000_000;
 
-	const slug = tag.slice(0, at);
-	const version = tag.slice(at + 2);
-
-	return BOOK_NAME.test(slug) && slug.length <= 40 && GAME_VERSION.test(version)
-		? { slug, version }
-		: null;
-}
+/** How one counter of the version before becomes a counter of this one. */
+const conversion = valibot.strictObject({
+	/** The counter of this version that takes what was held. */
+	to: name("A conversion's counter"),
+	/** What was held is multiplied by `times` and divided by `over`, rounded up. */
+	times: valibot.pipe(
+		valibot.number(),
+		valibot.integer("A conversion multiplies by a whole number"),
+		valibot.minValue(1),
+		valibot.maxValue(CONVERT_MAX_FACTOR)
+	),
+	over: valibot.pipe(
+		valibot.number(),
+		valibot.integer("A conversion divides by a whole number"),
+		valibot.minValue(1),
+		valibot.maxValue(CONVERT_MAX_FACTOR)
+	)
+});
 
 export const gameManifest = valibot.pipe(
 	valibot.strictObject({
@@ -261,6 +278,22 @@ export const gameManifest = valibot.pipe(
 				)
 			)
 		),
+		converts: valibot.optional(
+			valibot.strictObject({
+				/** The version whose counters these are: the one published before this. */
+				from: valibot.pipe(valibot.string(), valibot.regex(GAME_VERSION)),
+				/** Each counter of that version, by its id there. */
+				counters: valibot.pipe(
+					valibot.record(name("A counter's id"), conversion),
+					valibot.check(
+						(counters) =>
+							new Set(Object.values(counters).map((each) => each.to))
+								.size === Object.keys(counters).length,
+						"Two counters are converted into the same one"
+					)
+				)
+			})
+		),
 		fills: valibot.optional(
 			valibot.pipe(
 				valibot.array(fill),
@@ -281,6 +314,17 @@ export const gameManifest = valibot.pipe(
 			each.counters.every((id) => known.has(id))
 		);
 	}, "A fill names a counter the game does not have"),
+	valibot.check((game) => {
+		const known = new Set((game.counters ?? []).map((each) => each.id));
+
+		return Object.values(game.converts?.counters ?? {}).every((each) =>
+			known.has(each.to)
+		);
+	}, "A conversion names a counter the game does not have"),
+	valibot.check(
+		(game) => !game.converts || versionAfter(game.version, game.converts.from),
+		"A game converts counters from a version before its own"
+	),
 	valibot.check(
 		(game) => (game.minStake ?? MIN_STAKE) <= (game.maxStake ?? MAX_STAKE),
 		"The smallest stake is over the largest"

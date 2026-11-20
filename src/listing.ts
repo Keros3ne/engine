@@ -27,6 +27,8 @@ export interface StudioRound {
 	/** Known from a listing: there is no code here to call. */
 	listed: true;
 	slug: string;
+	/** The version of the game this is: a site may hold several, and plays the latest. */
+	version: string;
 	name: string;
 	blurb: string;
 	studio: string;
@@ -61,7 +63,8 @@ const cents = valibot.pipe(valibot.number(), valibot.integer(), valibot.minValue
 
 /** One game's entry in a listing. What the guide is, `checkGuide` says. */
 const entry = valibot.strictObject({
-	fingerprint: valibot.pipe(valibot.string(), valibot.regex(/^[0-9a-f]{64}$/)),
+	// What a listing made from a studio's repository said it was made from: no longer made.
+	fingerprint: valibot.optional(valibot.string()),
 	slug: valibot.string(),
 	name: valibot.pipe(
 		valibot.string(),
@@ -98,6 +101,37 @@ const entry = valibot.strictObject({
 });
 
 /**
+ * A studio's game from its entry in a listing, checked. Throws, naming where the entry
+ * came from, if it is wrong or is of another game or studio.
+ */
+export function listedEntry(
+	entry_: unknown,
+	from: string,
+	studio: string,
+	slug: string
+): StudioRound {
+	const parsed = valibot.safeParse(entry, entry_);
+	if (!parsed.success)
+		throw new Error(
+			`${from} does not list ${slug} as a site needs: ${parsed.issues[0].message}`
+		);
+
+	const { fingerprint: _, guide, ...game } = parsed.output;
+	if (game.slug !== slug || game.studio !== studio)
+		throw new Error(
+			`${from} lists ${slug} as ${game.slug} of ${game.studio}, not of ${studio}`
+		);
+
+	return {
+		...game,
+		version: game.books.game.version,
+		kind: "round",
+		listed: true,
+		guide: checkGuide(slug, guide)
+	};
+}
+
+/**
  * A studio's game as its listing says, checked. `listing` is the studio's `listing.json`
  * as read, or `undefined` if it has none. Throws, naming it, if the listing is wrong or is
  * of another game or studio.
@@ -111,19 +145,12 @@ export function listedGame(
 	if (typeof listing !== "object" || listing === null)
 		throw new Error(`${folder} has no ${LISTING_FILE}: list its games first.`);
 
-	const parsed = valibot.safeParse(entry, (listing as Record<string, unknown>)[slug]);
-	if (!parsed.success)
-		throw new Error(
-			`${folder}/${LISTING_FILE} does not list ${slug} as a site needs: ${parsed.issues[0].message}`
-		);
-
-	const { fingerprint: _, guide, ...game } = parsed.output;
-	if (game.slug !== slug || game.studio !== studio)
-		throw new Error(
-			`${folder}/${LISTING_FILE} lists ${slug} as ${game.slug} of ${game.studio}, not of ${studio}`
-		);
-
-	return { ...game, kind: "round", listed: true, guide: checkGuide(slug, guide) };
+	return listedEntry(
+		(listing as Record<string, unknown>)[slug],
+		`${folder}/${LISTING_FILE}`,
+		studio,
+		slug
+	);
 }
 
 /**

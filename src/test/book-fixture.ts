@@ -92,20 +92,78 @@ const TABLES: Record<string, NewRow[]> = {
 	]
 };
 
+/** How a fixture differs from the game as first written: another version of it. */
+export interface FixtureVersion {
+	/** What its manifest says otherwise: its version, its counters, how it converts them. */
+	manifest?: Record<string, unknown>;
+	/** What a row that drops gems drops, as a multiple of what the first version's does. */
+	gems?: number;
+	/** The folder its books go in, beside `game.json`: `books`, or `maths` as a package has them. */
+	books?: string;
+}
+
 /** Writes the game into a folder: its `game.json`, and its books beside it in `books/`. */
-export function writeBookFixture(folder: string): void {
-	const books = join(folder, "books");
+export function writeBookFixture(folder: string, version: FixtureVersion = {}): void {
+	const books = join(folder, version.books ?? "books");
+	const gems = version.gems ?? 1;
 
 	mkdirSync(books, { recursive: true });
-	writeFileSync(join(folder, "game.json"), JSON.stringify(MANIFEST));
+	writeFileSync(
+		join(folder, "game.json"),
+		JSON.stringify({ ...MANIFEST, ...version.manifest })
+	);
 
 	const summaries: Record<string, BookSummary> = {};
 	for (const [table, rows] of Object.entries(TABLES)) {
 		const writer = createBookWriter(books, table);
 
-		for (const row of rows) writer.add(row);
+		for (const row of rows)
+			writer.add(
+				row.adds
+					? {
+							...row,
+							adds: Object.fromEntries(
+								Object.entries(row.adds).map(([id, units]) => [
+									id,
+									units * gems
+								])
+							)
+						}
+					: row
+			);
 		summaries[table] = writer.close();
 	}
 
 	writeBooksSummary(books, summaries);
+}
+
+/** The files of the fixture as a package holds them, by their places. */
+export const PACKAGE_FILES = [
+	"game.json",
+	"guide.json",
+	"card.svg",
+	"client/index.html",
+	"client/_app/game.js",
+	"maths/books.json",
+	...Object.keys(TABLES).flatMap((table) => [
+		`maths/${table}.index`,
+		`maths/${table}.rows`
+	])
+];
+
+/**
+ * Writes the game into a folder as a package lays it out: its manifest, a guide, a card,
+ * a client of two files, and its books in `maths/`.
+ */
+export function writePackageFixture(folder: string, version: FixtureVersion = {}): void {
+	writeBookFixture(folder, { ...version, books: "maths" });
+
+	mkdirSync(join(folder, "client", "_app"), { recursive: true });
+	writeFileSync(
+		join(folder, "guide.json"),
+		JSON.stringify({ rules: [{ type: "text", text: "Spin, and gems may drop." }] })
+	);
+	writeFileSync(join(folder, "card.svg"), "<svg xmlns='http://www.w3.org/2000/svg' />");
+	writeFileSync(join(folder, "client", "index.html"), "<!doctype html><p>the game</p>");
+	writeFileSync(join(folder, "client", "_app", "game.js"), "export const game = 1;");
 }

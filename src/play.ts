@@ -14,6 +14,8 @@
 
 import { openBooks, type Book } from "./book-files.ts";
 import { bookGame, type BookGame } from "./book-game.ts";
+import { convertThrough } from "./counter-conversion.ts";
+import type { GameManifest } from "./game-manifest.ts";
 import type { RoundGame } from "./maths.ts";
 import { answer, type Concluded, type Seeds } from "./answers.ts";
 import { GameFailedError } from "./game-failed.ts";
@@ -47,6 +49,11 @@ export interface RoundMaths {
 	conclude(state: unknown, seeds: Seeds, progress: unknown): Promise<Concluded>;
 	view(state: unknown, seeds: Seeds): Promise<unknown>;
 	progressView(progress: unknown): Promise<unknown>;
+	/**
+	 * What was kept for a player at an earlier version of the game, `from`, carried into
+	 * this one's. Only a game that has versions and keeps progress says.
+	 */
+	carry?(progress: unknown, from: string | undefined): unknown;
 }
 
 /** A round game, asked in this process. */
@@ -68,24 +75,30 @@ export function inProcess(game: AnyRound): RoundMaths {
 /**
  * A site's studio games as they are played: their books opened where the site keeps
  * them, and each presented to the pipeline as a round game. `folderOf` says where a
- * game's books are, by slug, from the site's working directory.
+ * game's books are, from the site's working directory: a site may hold several versions
+ * of a game, each with books of its own. `versionsOf`, where a site keeps them, gives a
+ * game's manifests, oldest first, so that what a player held at an earlier version is
+ * carried into the one played (./counter-conversion.ts).
  */
-export function createPlay(folderOf: (slug: string) => string) {
-	const opened = new Map<string, Record<string, Book>>();
+export function createPlay(
+	folderOf: (game: StudioRound) => string,
+	versionsOf?: (game: StudioRound) => readonly GameManifest[]
+) {
+	/** By the game itself, not its slug: each version of a game is a game of its own. */
+	const opened = new Map<StudioRound, Record<string, Book>>();
 	const elsewhere = new Map<string, string>();
-	/** By the game itself, not its slug: a test may list another game under a slug. */
 	const played = new WeakMap<StudioRound, BookGame>();
 	const maths = new WeakMap<AnyRound | StudioRound, RoundMaths>();
 
 	/** A game's books, opened once and held to what its listing published. */
 	function booksOf(game: StudioRound): Record<string, Book> {
-		let books = opened.get(game.slug);
+		let books = opened.get(game);
 
 		if (!books) {
 			// Books missing, or not the ones listed: the game cannot be played, and nothing is staked.
 			try {
 				books = openBooks(
-					elsewhere.get(game.slug) ?? folderOf(game.slug),
+					elsewhere.get(game.slug) ?? folderOf(game),
 					game.books.tables
 				);
 			} catch (error) {
@@ -94,7 +107,7 @@ export function createPlay(folderOf: (slug: string) => string) {
 				);
 			}
 
-			opened.set(game.slug, books);
+			opened.set(game, books);
 		}
 
 		return books;
@@ -112,9 +125,18 @@ export function createPlay(folderOf: (slug: string) => string) {
 		return found;
 	}
 
+	/** Closes a game's books, if they were open. */
+	function close(game: StudioRound): void {
+		for (const book of Object.values(opened.get(game) ?? {})) book.close();
+		opened.delete(game);
+	}
+
 	return {
 		booksOf,
 		bookRoundGame,
+
+		/** Closes the books of a game a site no longer holds as it did: they are opened again when next played. */
+		close,
 
 		/**
 		 * What answers for a round game: the game itself for a site's own (or a test's
@@ -125,7 +147,20 @@ export function createPlay(folderOf: (slug: string) => string) {
 			if (found) return found;
 
 			if (isStudioRound(game))
-				found = inProcess(bookRoundGame(game) as unknown as AnyRound);
+				found = {
+					...inProcess(bookRoundGame(game) as unknown as AnyRound),
+					// What a player held at an earlier version, converted version by version.
+					...(game.keepsProgress && versionsOf
+						? {
+								carry: (progress: unknown, from: string | undefined) =>
+									convertThrough(
+										versionsOf(game),
+										from,
+										(progress ?? {}) as Record<string, number>
+									)
+							}
+						: {})
+				};
 			else if ("listed" in game)
 				throw new GameFailedError(
 					`${game.slug} is listed without books to play it from`
@@ -142,8 +177,7 @@ export function createPlay(folderOf: (slug: string) => string) {
 		 * or with no folder puts them back. Closes the game's books if they were open.
 		 */
 		keepBooksIn(slug: string, folder: string | null): void {
-			for (const book of Object.values(opened.get(slug) ?? {})) book.close();
-			opened.delete(slug);
+			for (const game of [...opened.keys()]) if (game.slug === slug) close(game);
 
 			if (folder === null) elsewhere.delete(slug);
 			else elsewhere.set(slug, folder);

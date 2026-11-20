@@ -45,6 +45,18 @@ export class InsufficientFundsError extends Error {
 	}
 }
 
+/**
+ * A bet asked on a version of a game that is no longer the one a site plays: the page it
+ * came from was opened before the game was updated. Nothing is taken; the page is to be
+ * loaded again, which brings the version there is now.
+ */
+export class GameUpdatedError extends BetRejectedError {
+	constructor() {
+		super("A new version of this game is ready. Reload to play it.");
+		this.name = "GameUpdatedError";
+	}
+}
+
 /** A move in a round that cannot be made. The round is left as it was, and the player told why. */
 export class RoundProblem extends Error {}
 
@@ -52,6 +64,8 @@ export class RoundProblem extends Error {}
 interface AnyGame {
 	slug: string;
 	kind?: string;
+	/** A studio's game says its version: a bet records the one it was played on. */
+	version?: string;
 	/** A studio's game names its studio: its bet is one its bar steps to, never typed. */
 	studio?: string;
 	minStake?: number;
@@ -76,6 +90,8 @@ export interface OpenBet {
 	id: string;
 	userId: string;
 	game: string;
+	/** The version of the game the round was opened on, for a game that has versions. */
+	version?: string;
 	/** Everything staked in the round so far, in cents. */
 	stake: number;
 	/** The bet it was opened at, which its wins are paid on. */
@@ -94,6 +110,8 @@ export interface NewBet {
 	id: string;
 	userId: string;
 	game: string;
+	/** The version of the game it is played on, for a game that has versions. */
+	version?: string;
 	stake: number;
 	baseStake: number;
 	seedsRef: string;
@@ -146,14 +164,23 @@ export interface BetStore<Extra = never, Game = unknown> {
 	openBet(userId: string, game: string): Promise<OpenBet | undefined>;
 	record(bet: NewBet): Promise<void>;
 	change(betId: string, change: BetChange): Promise<void>;
-	/** What a game has kept for the player at a bet, or `undefined` if nothing yet. */
-	progress(userId: string, game: string, stake: number): Promise<unknown | undefined>;
+	/**
+	 * What a game has kept for the player at a bet, and the version of the game it was
+	 * kept at, or `undefined` if nothing yet.
+	 */
+	progress(
+		userId: string,
+		game: string,
+		stake: number
+	): Promise<{ state: unknown; version?: string } | undefined>;
+	/** Keeps what a game holds for the player at a bet, as the version given left it. */
 	keepProgress(
 		userId: string,
 		game: string,
 		stake: number,
 		state: unknown,
-		now: Date
+		now: Date,
+		version?: string
 	): Promise<void>;
 	/**
 	 * A bet has settled: whatever else a site gives for one (level progress, a dropped
@@ -173,6 +200,11 @@ export interface BetInput {
 	stake: number;
 	params: unknown;
 	now?: Date;
+	/**
+	 * The version of the game the page asking was opened with. Given, a new bet is refused
+	 * (`GameUpdatedError`) unless it is the version the site plays now.
+	 */
+	version?: string;
 }
 
 /** A bet on a game settled in one step, as it came out. */
@@ -192,6 +224,8 @@ export interface InstantResult<Extra> {
 export interface RoundResult<Extra> {
 	id: string;
 	open: boolean;
+	/** The version of the game the round is played on, for a game that has versions. */
+	version?: string;
 	stake: number;
 	baseStake: number;
 	payout: number;
@@ -203,17 +237,34 @@ export interface RoundResult<Extra> {
 }
 
 /**
- * The pipeline over a site's games. `find` names a game by its slug; `maths` is what
- * answers for a round game (./play.ts).
+ * The pipeline over a site's games. `find` names a game by its slug: the version a site
+ * plays now, or, given a version, that one, which a round opened before an update is
+ * finished on. `maths` is what answers for a round game (./play.ts).
  */
 export function createPipeline<Game extends AnyGame, Extra = never>(options: {
-	find(slug: string): Game | undefined;
+	find(slug: string, version?: string): Game | undefined;
 	maths(game: Game): RoundMaths;
 }) {
 	type Store = BetStore<Extra, Game>;
 	const { find, maths: mathsOf } = options;
 
 	const isInstant = (game: AnyGame): game is InstantPlay => game.kind === "instant";
+
+	/**
+	 * The game a round in progress is played on: the version it was opened on, which is
+	 * the one a site plays now unless the game has been updated since.
+	 */
+	function playedOn(current: Game, bet: OpenBet): Game {
+		if (bet.version === undefined || bet.version === current.version) return current;
+
+		const game = find(current.slug, bet.version);
+		if (!game)
+			throw new GameFailedError(
+				`${current.slug} has a round open on version ${bet.version}, which is not here`
+			);
+
+		return game;
+	}
 
 	/**
 	 * Checks shared by every kind of bet. Returns the game, its options checked, and what
@@ -223,6 +274,13 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 		const game = find(input.game);
 		if (!game || (game.kind === "instant") !== (kind === "instant"))
 			throw new BetRejectedError("That game does not exist.");
+		// A page opened before the game was updated holds the old client: it starts nothing new.
+		if (
+			input.version !== undefined &&
+			game.version !== undefined &&
+			input.version !== game.version
+		)
+			throw new GameUpdatedError();
 
 		// A round game's options are checked by the game: for a studio's, by what its books offer.
 		let checked: { params: unknown; costBp: number } | null;
@@ -277,8 +335,12 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 		if (!maths.keepsProgress) return undefined;
 
 		const kept = await store.progress(userId, game.slug, stake);
+		if (kept === undefined) return maths.initialProgress();
 
-		return kept === undefined ? maths.initialProgress() : kept;
+		// Kept at an earlier version of the game, it is carried into this one's.
+		return maths.carry && kept.version !== game.version
+			? maths.carry(kept.state, kept.version)
+			: kept.state;
 	}
 
 	/**
@@ -343,7 +405,8 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 					game.slug,
 					bet.baseStake,
 					concluded.progress,
-					now
+					now,
+					game.version
 				);
 			}
 
@@ -360,6 +423,7 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 		return {
 			id: bet.id,
 			open: !outcome,
+			...(bet.version !== undefined ? { version: bet.version } : {}),
 			stake: bet.stake,
 			baseStake: bet.baseStake,
 			payout,
@@ -453,6 +517,7 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 				id,
 				userId,
 				game: game.slug,
+				...(game.version !== undefined ? { version: game.version } : {}),
 				stake: charge,
 				baseStake: stake,
 				seedsRef: seeds.ref,
@@ -469,6 +534,7 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 					id,
 					userId,
 					game: game.slug,
+					...(game.version !== undefined ? { version: game.version } : {}),
 					stake: charge,
 					baseStake: stake,
 					nonce: seeds.nonce,
@@ -489,13 +555,16 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 			input: { userId: string; game: string; action: unknown; now?: Date }
 		): Promise<RoundResult<Extra>> {
 			const { userId, now = new Date() } = input;
-			const game = find(input.game);
-			if (!game || isInstant(game))
+			const current = find(input.game);
+			if (!current || isInstant(current))
 				throw new RoundProblem("That game does not exist.");
 
 			// Two moves sent at once take turns, the second seeing the round the first left.
-			const bet = await store.openBet(userId, game.slug);
+			const bet = await store.openBet(userId, current.slug);
 			if (!bet) throw new RoundProblem("There is no round in progress.");
+
+			// A round is finished on the version of the game it was opened on.
+			const game = playedOn(current, bet);
 			// No round needs this many moves. One that does is stuck, and stops here.
 			if (bet.actions >= ROUND_MAX_ACTIONS)
 				throw new RoundProblem("This round has taken too many moves.");
@@ -544,17 +613,19 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 			userId: string,
 			slug: string
 		): Promise<RoundResult<Extra> | null> {
-			const game = find(slug);
-			if (!game || isInstant(game)) return null;
+			const current = find(slug);
+			if (!current || isInstant(current)) return null;
 
 			const bet = await store.openBet(userId, slug);
 			if (!bet) return null;
 
+			const game = playedOn(current, bet);
 			const maths = mathsOf(game);
 
 			return {
 				id: bet.id,
 				open: true,
+				...(bet.version !== undefined ? { version: bet.version } : {}),
 				stake: bet.stake,
 				baseStake: bet.baseStake,
 				payout: 0,
@@ -569,14 +640,18 @@ export function createPipeline<Game extends AnyGame, Extra = never>(options: {
 			};
 		},
 
-		/** A player's progress in a game at a bet, as they may see it. `null` for a game that keeps none. */
+		/**
+		 * A player's progress in a game at a bet, as they may see it: in the version a site
+		 * plays now, or the one named. `null` for a game that keeps none.
+		 */
 		async progressView(
 			store: Store,
 			userId: string,
 			slug: string,
-			stake: number
+			stake: number,
+			version?: string
 		): Promise<unknown> {
-			const game = find(slug);
+			const game = (version !== undefined && find(slug, version)) || find(slug);
 			if (!game || isInstant(game) || !mathsOf(game).keepsProgress) return null;
 
 			return mathsOf(game).progressView(
