@@ -5,6 +5,7 @@
  *
  *   {
  *     "slug": "stormglass",
+ *     "version": "1.4.0",
  *     "name": "Stormglass",
  *     "blurb": "Five reels under a sky you choose.",
  *     "category": "slots",
@@ -14,6 +15,10 @@
  *     ]
  *   }
  *
+ * - `version` is the game's own, three numbers with points between: a game is released by
+ *   itself, at its version, whatever else its repository holds, and a release of it is
+ *   named for the two (`stormglass-v1.4.0`, `releaseTag`). It is raised to release the
+ *   game again, and is no part of how the game plays.
  * - `modes` are the ways of opening a round, the ordinary one first: what each costs, as
  *   a multiple of the bet in basis points, a whole number of bets (20000, never 12500:
  *   a cost must come to whole cents at every bet), and the table its row is drawn from. A game
@@ -182,9 +187,40 @@ const steps = valibot.pipe(
 /** A set of counters as one string, whatever order they were named in. */
 const setKey = (ids: readonly string[]) => [...ids].sort().join(" ");
 
+/** A game's version as its manifest writes it: `1.4.0`. */
+export const GAME_VERSION = /^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$/;
+
+/** The tag a release of a game is named by: its slug and its version, `stormglass-v1.4.0`. */
+export function releaseTag(slug: string, version: string): string {
+	return `${slug}-v${version}`;
+}
+
+/**
+ * The game and the version a release's tag names, or `null` for a tag that is not one a
+ * game is released by.
+ */
+export function releaseOf(tag: string): { slug: string; version: string } | null {
+	const at = tag.lastIndexOf("-v");
+	if (at <= 0) return null;
+
+	const slug = tag.slice(0, at);
+	const version = tag.slice(at + 2);
+
+	return BOOK_NAME.test(slug) && slug.length <= 40 && GAME_VERSION.test(version)
+		? { slug, version }
+		: null;
+}
+
 export const gameManifest = valibot.pipe(
 	valibot.strictObject({
 		slug: name("The game's slug"),
+		version: valibot.pipe(
+			valibot.string(),
+			valibot.regex(
+				GAME_VERSION,
+				"The game's version is three numbers with points between: 1.0.0"
+			)
+		),
 		name: words("The game's name", 60),
 		blurb: words("The game's blurb", 120),
 		category: valibot.picklist(["slots", "games"]),

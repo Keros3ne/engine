@@ -49,6 +49,7 @@ const game = (...modes: [string, number, string][]) =>
 		slug: "test-game",
 		name: "Test game",
 		blurb: "A game for the check.",
+		version: "1.0.0",
 		category: "slots",
 		modes: modes.map(([id, bets, opens]) => ({
 			id,

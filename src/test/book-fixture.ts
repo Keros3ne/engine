@@ -38,6 +38,7 @@ const MANIFEST = {
 	slug: FIXTURE,
 	name: "Book Fixture",
 	blurb: "A small game for the engine's own tests of books.",
+	version: "1.0.0",
 	category: "slots",
 	modes: [
 		{ id: "spin", name: "Spin", costBp: 10_000, table: "spin" },

@@ -16,7 +16,14 @@ import {
 	readBooksSummary,
 	writeBooksSummary
 } from "./book-files.ts";
-import { checkGameManifest, fillsFor, missingTables, modeOf } from "./game-manifest.ts";
+import {
+	checkGameManifest,
+	fillsFor,
+	missingTables,
+	modeOf,
+	releaseOf,
+	releaseTag
+} from "./game-manifest.ts";
 
 const folder = mkdtempSync(join(tmpdir(), "keros3ne-game-"));
 afterAll(() => rmSync(folder, { recursive: true, force: true }));
@@ -25,6 +32,7 @@ const game = {
 	slug: "stormglass",
 	name: "Stormglass",
 	blurb: "Five reels under a sky you choose.",
+	version: "1.0.0",
 	category: "slots",
 	modes: [
 		{ id: "spin", name: "Spin", costBp: 10_000, table: "spin" },
@@ -71,6 +79,35 @@ describe("a game's manifest", () => {
 		expect(refused({ shapes: ["wide", "wide"] })).toThrow(/twice/);
 		expect(refused({ minStake: 500, maxStake: 100 })).toThrow(/over the largest/);
 		expect(refused({ rtpBp: 9_700 })).toThrow(/rtpBp/);
+	});
+
+	it("says its own version, and is released under a tag made of its slug and that", () => {
+		expect(checkGameManifest("a game", game).version).toBe("1.0.0");
+
+		const { version: _none, ...unversioned } = game;
+		expect(() => checkGameManifest("a game", unversioned)).toThrow(/version/);
+		for (const version of ["1.0", "v1.0.0", "1.0.0-beta", "01.0.0", ""])
+			expect(() => checkGameManifest("a game", { ...game, version })).toThrow(
+				/three numbers/
+			);
+
+		expect(releaseTag("stormglass", "1.4.0")).toBe("stormglass-v1.4.0");
+		expect(releaseOf("stormglass-v1.4.0")).toEqual({
+			slug: "stormglass",
+			version: "1.4.0"
+		});
+		// A slug may itself hold "-v": the version is what follows the last.
+		expect(releaseOf("the-vault-v2.0.10")).toEqual({
+			slug: "the-vault",
+			version: "2.0.10"
+		});
+		for (const tag of [
+			"v1.4.0",
+			"stormglass-1.4.0",
+			"stormglass-v1.4",
+			"Storm-v1.0.0"
+		])
+			expect(releaseOf(tag)).toBeNull();
 	});
 
 	it("may say what its bar moves the bet by, in bands from the smallest bets up", () => {
