@@ -7,7 +7,8 @@ Whoever puts this on a page says only which game, where its client is, and who k
 player's bets (`site`). The page gives it room: this is as wide as the element it is in,
 and no taller than `--game-room-height`, if the page sets that. From that room this
 chooses which of the game's two views is shown (./shapes.ts), makes the frame that
-shape, as large as fits, and tells the game. Nothing else decides a game's view: not the
+shape, as large as fits, and tells the game. The frame is `iframe.game-frame`, for a page
+or a test that needs to find it. Nothing else decides a game's view: not the
 page round it, and not the game.
 
     <GameFrame {game} src="/studio-frame/{game.slug}/index.html" {site} {initial} {balance} />
@@ -106,7 +107,7 @@ Created: 2026-11-19
 	<div class="limit" aria-hidden="true"></div>
 
 	<iframe
-		class={{ waiting: !bridge.shown || !size }}
+		class={["game-frame", { waiting: !bridge.shown || !size }]}
 		title="{game.name}, the game"
 		{src}
 		sandbox="allow-scripts"
