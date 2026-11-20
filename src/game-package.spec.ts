@@ -30,6 +30,7 @@ import {
 	isInstalled,
 	listingOf,
 	packedName,
+	peekPackage,
 	readPackageRecord,
 	writePackage,
 	type PackageRecord
@@ -129,6 +130,16 @@ describe("a game, packed", () => {
 		expect(record.files["client/index.html"]).toEqual(
 			await fileDigest(join(made, "client", "index.html"))
 		);
+	});
+
+	it("says what it is without being installed", async () => {
+		const { record, game } = await peekPackage(from(join(out, NAME)));
+
+		expect(record).toMatchObject(ABOUT);
+		expect(game).toMatchObject({ slug: FIXTURE, version: "1.0.0" });
+		await expect(
+			peekPackage(() => Readable.from([gzipSync("not a game")]))
+		).rejects.toThrow();
 	});
 
 	it("is the same file whenever the same game is packed, and says its own digest", async () => {

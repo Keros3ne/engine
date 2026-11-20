@@ -47,7 +47,12 @@ import type { BookListing } from "./book-game.ts";
 import { checkGameFolder, type CheckedGame } from "./book-files.ts";
 import { BOOK_NAME } from "./book.ts";
 import { CLIENT_FILE_TYPES } from "./frame.ts";
-import { BOOK_RTP_BP, GAME_VERSION } from "./game-manifest.ts";
+import {
+	BOOK_RTP_BP,
+	GAME_VERSION,
+	checkGameManifest,
+	type GameManifest
+} from "./game-manifest.ts";
 import { checkGuide } from "./guide.ts";
 import { PROTOCOL } from "./protocol.ts";
 import { isPlace, tarBytes, tarEntries, type TarFile } from "./tar.ts";
@@ -420,6 +425,43 @@ export async function installPackage(
 	} finally {
 		rmSync(coming, { recursive: true, force: true });
 	}
+}
+
+/**
+ * What a package says it is, without installing it: its record and its game's manifest,
+ * which are the first things in it. Nothing is held to anything here: this is for telling
+ * what a file is, before a site decides what to do with it. Throws if it is no package.
+ */
+export async function peekPackage(
+	open: () => Promise<Readable> | Readable
+): Promise<{ record: PackageRecord; game: GameManifest }> {
+	const source = await open();
+	const unzipped = createGunzip();
+	void pipeline(source, unzipped).catch(() => {});
+
+	let held: PackageRecord | undefined;
+
+	try {
+		for await (const entry of tarEntries(unzipped)) {
+			if (entry.name !== PACKAGE_RECORD && entry.name !== "game.json") break;
+			if (entry.size > MOST_RECORD_BYTES) break;
+
+			const parts: Buffer[] = [];
+			for await (const part of entry.bytes()) parts.push(part);
+
+			const read = JSON.parse(Buffer.concat(parts).toString("utf8"));
+			if (entry.name === PACKAGE_RECORD) held = valibot.parse(record, read);
+			else if (held)
+				return { record: held, game: checkGameManifest("its game.json", read) };
+		}
+	} finally {
+		source.destroy();
+		unzipped.destroy();
+	}
+
+	throw new Error(
+		`This is not a game's package: it does not begin with ${PACKAGE_RECORD} and game.json.`
+	);
 }
 
 /**
