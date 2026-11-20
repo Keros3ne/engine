@@ -17,7 +17,12 @@ Author: dwclake
 Created: 2026-11-19
 -->
 <script lang="ts" generics="Extra">
-	import { createGameBridge, type GameSite, type HostedGame } from "./bridge.svelte.ts";
+	import {
+		createGameBridge,
+		type BridgeStart,
+		type GameSite,
+		type HostedGame
+	} from "./bridge.svelte.ts";
 	import type { RoundMessage } from "./protocol.ts";
 	import { SHAPE_RATIO, fitIn, viewFor, type Shape } from "./shapes.ts";
 
@@ -36,6 +41,12 @@ Created: 2026-11-19
 		 * browser that knows the word: one that does not says so in its console.
 		 */
 		sound?: boolean;
+		/** Whether the game is told to keep still. Left out, what the player's device asks. */
+		reducedMotion?: boolean;
+		/** Told of every message to and from the game, and of those ignored: for a page that shows them. */
+		heard?: BridgeStart["heard"];
+		/** Called with the view chosen, and how large the game is drawn, whenever either changes. */
+		onroom?: (room: { view: Shape; width: number; height: number }) => void;
 		/** Something the page should say under the game, if there is anything: bound, for the page to show in its own way. */
 		problem?: string | null;
 		/** Whether the last bet was refused for want of balance: bound, for a page that can offer more. */
@@ -49,6 +60,9 @@ Created: 2026-11-19
 		initial = null,
 		balance,
 		sound = true,
+		reducedMotion,
+		heard,
+		onroom,
 		problem = $bindable(null),
 		outOfFunds = $bindable(false)
 	}: Props = $props();
@@ -66,7 +80,13 @@ Created: 2026-11-19
 	const bridge = createGameBridge(game, site, {
 		round: initial,
 		balance,
-		view: "wide"
+		view: "wide",
+		reducedMotion,
+		heard
+	});
+
+	$effect(() => {
+		if (size) onroom?.({ view, ...size });
 	});
 
 	$effect(() => {
