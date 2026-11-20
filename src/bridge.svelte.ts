@@ -63,11 +63,26 @@ export interface HostedGame {
 /** How long a game's frame is kept out of sight if its page never says it has drawn. */
 const SHOW_ANYWAY_MS = 4_000;
 
+/** What a bridge is started with. */
+export interface BridgeStart {
+	/** A round the player left open, to pick back up. */
+	round: RoundMessage | null;
+	balance: number;
+	view: Shape;
+	/** Whether the game is told to keep still. Left out, what the player's device asks. */
+	reducedMotion?: boolean;
+	/**
+	 * Told of every message, for a page that shows them (a studio's own, while a game is
+	 * made): what the game sent, what it was sent, and what was ignored, with why.
+	 */
+	heard?(kind: "in" | "out" | "ignored", message: unknown, why?: string): void;
+}
+
 /** The bridge for one game in one frame. */
 export function createGameBridge<Extra = unknown>(
 	game: HostedGame,
 	site: GameSite<Extra>,
-	start: { round: RoundMessage | null; balance: number; view: Shape }
+	start: BridgeStart
 ) {
 	// What the page around the frame shows.
 	let status = $state("");
@@ -91,8 +106,10 @@ export function createGameBridge<Extra = unknown>(
 
 	// The frame's origin is its own and has no name, so there is nothing to
 	// address but "*". Nothing secret is ever sent.
-	const post = (message: FromSite) =>
+	const post = (message: FromSite) => {
+		start.heard?.("out", message);
 		frame?.contentWindow?.postMessage({ protocol: PROTOCOL, ...message }, "*");
+	};
 
 	/** The result has been shown, or enough time has passed: what was held back is let go. */
 	function settle() {
@@ -174,17 +191,32 @@ export function createGameBridge<Extra = unknown>(
 		if (protocol !== PROTOCOL) {
 			// A client built for another protocol: say so, rather than leave the game waiting
 			// for an answer that never comes.
-			if (typeof protocol === "string" && protocol.startsWith(PROTOCOL_FAMILY))
+			if (typeof protocol === "string" && protocol.startsWith(PROTOCOL_FAMILY)) {
 				problem =
 					"This game was built for another version of the site, and cannot be played here.";
+				start.heard?.(
+					"ignored",
+					event.data,
+					`it speaks ${protocol}, and this host ${PROTOCOL}`
+				);
+			}
 
 			return;
 		}
 
 		const parsed = v.safeParse(fromGame, event.data);
-		if (!parsed.success) return;
+		if (!parsed.success) {
+			start.heard?.(
+				"ignored",
+				event.data,
+				"it is not a message a host understands"
+			);
+
+			return;
+		}
 
 		const message = parsed.output;
+		start.heard?.("in", message);
 
 		switch (message.type) {
 			case "drawn":
@@ -199,7 +231,9 @@ export function createGameBridge<Extra = unknown>(
 					game: { slug: game.slug, name: game.name },
 					balance,
 					limits: stakeLimits(game),
-					reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+					reducedMotion:
+						start.reducedMotion ??
+						matchMedia("(prefers-reduced-motion: reduce)").matches,
 					round: start.round?.open ? start.round : null,
 					view
 				});
