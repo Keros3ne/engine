@@ -1,7 +1,7 @@
 /**
  * The bet pipeline on a store in memory: a game settled in one step, and what a store is
  * told. Rounds are held by the stand-in's tests (./stand-in.spec.ts), which play through
- * the same pipeline.
+ * the same pipeline. A game played from books is held to it in ./pipeline-books.spec.ts.
  *
  * Author: dwclake
  * Created: 2026-11-19
