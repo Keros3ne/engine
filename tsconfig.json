@@ -9,7 +9,8 @@
 		"noEmit": true,
 		"allowImportingTsExtensions": true,
 		"skipLibCheck": true,
-		"noUncheckedSideEffectImports": false
+		"noUncheckedSideEffectImports": false,
+		"verbatimModuleSyntax": true
 	},
-	"include": ["src/**/*.ts", "bin/**/*.ts", "*.ts"]
+	"include": ["src/**/*.ts", "src/**/*.svelte", "*.ts"]
 }

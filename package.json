@@ -1,6 +1,6 @@
 {
 	"name": "@keros3ne/engine",
-	"version": "0.7.0",
+	"version": "0.8.0",
 	"type": "module",
 	"description": "Plays a studio's game from its books: the rules every bet is held to, a round opened, drawn and settled, and a bet checked from its seeds.",
 	"license": "MIT",
@@ -12,10 +12,12 @@
 		"./book-files": "./src/book-files.ts",
 		"./book-game": "./src/book-game.ts",
 		"./book-round": "./src/book-round.ts",
+		"./bridge.svelte": "./src/bridge.svelte.ts",
 		"./frame": "./src/frame.ts",
 		"./game-failed": "./src/game-failed.ts",
 		"./game-manifest": "./src/game-manifest.ts",
 		"./guide": "./src/guide.ts",
+		"./host": "./src/host.ts",
 		"./kero": "./src/kero.ts",
 		"./limits": "./src/limits.ts",
 		"./listing": "./src/listing.ts",
@@ -31,11 +33,12 @@
 		"./stake-steps": "./src/stake-steps.ts",
 		"./stand-in": "./src/stand-in.ts",
 		"./verify": "./src/verify.ts",
-		"./verify-books": "./src/verify-books.ts"
+		"./verify-books": "./src/verify-books.ts",
+		"./GameFrame.svelte": "./src/GameFrame.svelte"
 	},
 	"scripts": {
 		"test": "bun --bun vitest --run",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "svelte-check --tsconfig ./tsconfig.json",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},
@@ -49,10 +52,15 @@
 		"prettier": "^3.10.1",
 		"prettier-plugin-svelte": "^4.1.1",
 		"typescript": "^6.0.3",
-		"vitest": "^4.1.8"
+		"vitest": "^4.1.8",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.6.0"
 	},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Keros3ne/engine.git"
+	},
+	"peerDependencies": {
+		"svelte": "^5.57.2"
 	}
 }

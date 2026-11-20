@@ -25,6 +25,7 @@ import {
 } from "./pipeline.ts";
 import { inProcess } from "./play.ts";
 import type { HistoryBet, InitMessage, RoundMessage } from "./protocol.ts";
+import type { Shape } from "./shapes.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyStudioGame = StudioGame<any, any, any, any, any, any, any>;
@@ -115,13 +116,15 @@ export function createStandIn(game: AnyStudioGame, options: { balance?: number }
 			return memory.fairness;
 		},
 
-		async init(reducedMotion: boolean): Promise<InitMessage> {
+		/** What a game is told when it first asks: how things stand, and which view to show. */
+		async init(reducedMotion: boolean, view: Shape = "wide"): Promise<InitMessage> {
 			return {
 				game: { slug: game.slug, name: game.name },
 				balance: memory.balance,
 				limits,
 				reducedMotion,
-				round: await round()
+				round: await round(),
+				view
 			};
 		},
 

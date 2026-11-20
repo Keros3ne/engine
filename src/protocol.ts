@@ -6,6 +6,7 @@
  * with `postMessage`, and everything it asks for the site checks before acting.
  * Use `connect()` from ./client rather than these directly.
  */
+import type { Shape } from "./shapes.ts";
 
 /** What every version of the protocol starts with. */
 export const PROTOCOL_FAMILY = "keros3ne-game/";
@@ -14,7 +15,7 @@ export const PROTOCOL_FAMILY = "keros3ne-game/";
  * number after the slash is the protocol's version: it goes up when a message changes
  * in a way the other side would misread, and the site refuses a client on another one.
  */
-export const PROTOCOL = `${PROTOCOL_FAMILY}2` as const;
+export const PROTOCOL = `${PROTOCOL_FAMILY}3` as const;
 
 /** A round as the site reports it. `view` and `progress` are the game's own shapes. */
 export interface RoundMessage<View = unknown, ProgressView = unknown> {
@@ -43,6 +44,11 @@ export interface InitMessage<View = unknown, ProgressView = unknown> {
 	reducedMotion: boolean;
 	/** A round left open, here or on another device, to pick back up. */
 	round: RoundMessage<View, ProgressView> | null;
+	/**
+	 * Which of its two views the game is to show. Whoever hosts the game chooses it, from the
+	 * room the page gives (./shapes.ts): a game never works it out for itself.
+	 */
+	view: Shape;
 }
 
 export interface HistoryBet {
@@ -88,6 +94,8 @@ export type FromSite =
 	| { type: "progress"; id: number; bet: number; progress: unknown }
 	| { type: "history"; id: number; bets: HistoryBet[] }
 	/** The balance changed for a reason outside the game. */
-	| { type: "balance"; balance: number };
+	| { type: "balance"; balance: number }
+	/** The room the game has on the page changed, and it is to show its other view. */
+	| { type: "view"; view: Shape };
 
 export type Envelope<Message> = Message & { protocol: typeof PROTOCOL };
