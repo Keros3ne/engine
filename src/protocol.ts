@@ -6,6 +6,7 @@
  * with `postMessage`, and everything it asks for the site checks before acting.
  * Use `connect()` from ./client rather than these directly.
  */
+import type { FrameReport } from "./frame-rate.ts";
 import type { Shape } from "./shapes.ts";
 
 /** What every version of the protocol starts with. */
@@ -49,6 +50,11 @@ export interface InitMessage<View = unknown, ProgressView = unknown> {
 	 * room the page gives (./shapes.ts): a game never works it out for itself.
 	 */
 	view: Shape;
+	/**
+	 * The host asks to be told how smoothly the game is drawn (`frames`, below): a page where
+	 * a game is reviewed or tried. Left out where a game is played, and nothing is counted.
+	 */
+	measure?: boolean;
 }
 
 export interface HistoryBet {
@@ -78,7 +84,13 @@ export type FromGame =
 	/** Words for a screen reader, for whatever just happened on the canvas. */
 	| { type: "announce"; text: string }
 	| { type: "progress"; id: number; bet: number }
-	| { type: "history"; id: number };
+	| { type: "history"; id: number }
+	/**
+	 * The frames the page was given over the last second or so (./frame-rate.ts), sent only
+	 * to a host that asked for them (`measure`). The game's end of the conversation counts
+	 * and sends them: a game does nothing for it.
+	 */
+	| ({ type: "frames" } & FrameReport);
 
 /** What the site sends. */
 export type FromSite =

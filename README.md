@@ -33,6 +33,7 @@ under its own names.
 | `/play`, `/listing`                         | A site's studio games opened from their books, and their listing                                       |
 | `/proofs`, `/verify`, `/verify-books`       | A bet checked from its seeds, in a player's own browser                                                |
 | `/GameFrame.svelte`, `/bridge.svelte`       | A game hosted: its sandboxed frame in the room a page gives it, and the host's end of its conversation |
+| `/frame-rate`                               | How smoothly a game is drawn, counted inside its frame for a host that asks                            |
 | `/shapes`                                   | A game's two views, their sizes, and the one rule that picks one                                       |
 | `/client`, `/Views.svelte`                  | The engine's end inside the frame: the game's connection, and the view it shows as it is told          |
 | `/frame`, `/serve`, `/protocol`             | The policy a game's frame is held to, its files served, and the                                        |

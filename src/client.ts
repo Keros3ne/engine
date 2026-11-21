@@ -20,6 +20,7 @@ import {
 	type RoundMessage
 } from "./protocol.ts";
 
+import { createFrameMeter } from "./frame-rate.ts";
 import type { Shape } from "./shapes.ts";
 
 export type { HistoryBet, InitMessage, RoundMessage };
@@ -80,6 +81,22 @@ export function balanceBeforePayout(
 
 const REPLY_TIMEOUT_MS = 20_000;
 
+/**
+ * Counts the frames the page is given, and tells the host each second or so: for a host
+ * that asked. A page that is hidden is given no frames, which is not the game's doing, so
+ * the count starts again when it is next shown.
+ */
+function measureFrames(send: (message: FromGame) => void): void {
+	const meter = createFrameMeter((counted) => send({ type: "frames", ...counted }));
+	const count = (now: number) => {
+		meter.frame(now);
+		window.requestAnimationFrame(count);
+	};
+
+	document.addEventListener("visibilitychange", () => meter.pause());
+	window.requestAnimationFrame(count);
+}
+
 export function connect<View = unknown, ProgressView = unknown>(): Promise<
 	GameHost<View, ProgressView>
 > {
@@ -131,6 +148,7 @@ export function connect<View = unknown, ProgressView = unknown>(): Promise<
 				if (connected) return;
 				connected = true;
 				window.clearInterval(hello);
+				if (message.measure) measureFrames(send);
 				ready({
 					init: message as unknown as InitMessage<View, ProgressView>,
 					open: (bet, params) =>

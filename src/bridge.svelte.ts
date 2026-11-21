@@ -14,6 +14,7 @@
  */
 import * as v from "valibot";
 import { stakeLimits } from "./bets.ts";
+import type { FrameReport } from "./frame-rate.ts";
 import { ANNOUNCE_MAX, SETTLE_FALLBACK_MS, fromGame } from "./host.ts";
 import {
 	PROTOCOL,
@@ -76,6 +77,12 @@ export interface BridgeStart {
 	 * made): what the game sent, what it was sent, and what was ignored, with why.
 	 */
 	heard?(kind: "in" | "out" | "ignored", message: unknown, why?: string): void;
+	/**
+	 * Told how smoothly the game is drawn, each second or so (./frame-rate.ts). The game is
+	 * asked to count its frames only where this is given: a page where a game is reviewed
+	 * or tried, never one where it is played.
+	 */
+	frames?(report: FrameReport): void;
 }
 
 /** The bridge for one game in one frame. */
@@ -216,6 +223,15 @@ export function createGameBridge<Extra = unknown>(
 		}
 
 		const message = parsed.output;
+
+		// Not among the messages a page shows: one a second would bury the rest.
+		if (message.type === "frames") {
+			const { type: _type, ...report } = message;
+			start.frames?.(report);
+
+			return;
+		}
+
 		start.heard?.("in", message);
 
 		switch (message.type) {
@@ -235,7 +251,8 @@ export function createGameBridge<Extra = unknown>(
 						start.reducedMotion ??
 						matchMedia("(prefers-reduced-motion: reduce)").matches,
 					round: start.round?.open ? start.round : null,
-					view
+					view,
+					...(start.frames ? { measure: true } : {})
 				});
 				break;
 			case "open":

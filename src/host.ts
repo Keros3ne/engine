@@ -16,6 +16,7 @@ export const SETTLE_FALLBACK_MS = 5 * 60_000;
 export const ANNOUNCE_MAX = 300;
 
 const id = v.pipe(v.number(), v.integer(), v.minValue(0));
+const count = v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(10_000_000));
 /** Everything a game may send. Anything else is ignored. */
 export const fromGame = v.variant("type", [
 	// The page has something to show. Sent by the page itself before any of the game's code
@@ -36,5 +37,13 @@ export const fromGame = v.variant("type", [
 		id,
 		bet: v.pipe(v.number(), v.integer(), v.minValue(1))
 	}),
-	v.object({ type: v.literal("history"), id })
+	v.object({ type: v.literal("history"), id }),
+	// How smoothly the game is drawn, which only a host that asked is told (./frame-rate.ts).
+	v.object({
+		type: v.literal("frames"),
+		frames: count,
+		ms: count,
+		longest: count,
+		slow: count
+	})
 ]);

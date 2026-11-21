@@ -45,6 +45,8 @@ Created: 2026-11-19
 		reducedMotion?: boolean;
 		/** Told of every message to and from the game, and of those ignored: for a page that shows them. */
 		heard?: BridgeStart["heard"];
+		/** Told how smoothly the game is drawn, each second or so. Given, the game is asked to count its frames. */
+		onframes?: BridgeStart["frames"];
 		/** Called with the view chosen, and how large the game is drawn, whenever either changes. */
 		onroom?: (room: { view: Shape; width: number; height: number }) => void;
 		/** Something the page should say under the game, if there is anything: bound, for the page to show in its own way. */
@@ -62,6 +64,7 @@ Created: 2026-11-19
 		sound = true,
 		reducedMotion,
 		heard,
+		onframes,
 		onroom,
 		problem = $bindable(null),
 		outOfFunds = $bindable(false)
@@ -82,7 +85,8 @@ Created: 2026-11-19
 		balance,
 		view: "wide",
 		reducedMotion,
-		heard
+		heard,
+		frames: onframes
 	});
 
 	$effect(() => {
