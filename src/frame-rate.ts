@@ -121,3 +121,34 @@ export function addFrames(kept: FrameSummary | null, report: FrameReport): Frame
 		ms
 	};
 }
+
+/**
+ * Whether a game's frame was in sight for the whole of what a report covers, as its host
+ * knows it. A browser gives no frames to a page scrolled out of view, or in a tab behind
+ * another, and the game cannot tell that from a frame it was slow to draw: the wait across
+ * it would be reported as one very slow frame. The host can tell, and counts no report
+ * that reaches back into a time the frame was out of sight.
+ *
+ * `seen(visible)` is told whenever that changes; `counts(report)` is asked of each report
+ * as it arrives. `now` is a clock in milliseconds.
+ */
+export function createSight(now: () => number = () => performance.now()) {
+	/** Whether the frame is out of sight now, and when it was last. */
+	let unseen = false;
+	let lastUnseen = Number.NEGATIVE_INFINITY;
+
+	return {
+		seen(visible: boolean) {
+			// Coming back into sight is the last moment it was out of it.
+			if (visible && unseen) lastUnseen = now();
+			unseen = !visible;
+		},
+		counts(report: Pick<FrameReport, "ms">): boolean {
+			// A little more than the report says it covers: it took a moment to arrive.
+			return !unseen && now() - report.ms - SIGHT_SLACK_MS >= lastUnseen;
+		}
+	};
+}
+
+/** How long a report is allowed to have taken to arrive, in milliseconds. */
+const SIGHT_SLACK_MS = 250;

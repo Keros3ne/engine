@@ -1,6 +1,6 @@
 {
 	"name": "@keros3ne/engine",
-	"version": "0.11.0",
+	"version": "0.11.1",
 	"type": "module",
 	"description": "Plays a studio's game from its books: the rules every bet is held to, a round opened, drawn and settled, and a bet checked from its seeds.",
 	"license": "MIT",

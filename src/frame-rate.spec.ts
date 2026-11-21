@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
 	addFrames,
 	createFrameMeter,
+	createSight,
 	framesASecond,
 	type FrameReport
 } from "./frame-rate.ts";
@@ -72,5 +73,29 @@ describe("a game's frames, counted", () => {
 			slow: 6,
 			ms: 3_000
 		});
+	});
+
+	it("is not counted by its host across a time the frame was out of sight", () => {
+		let clock = 10_000;
+		const sight = createSight(() => clock);
+		const second = { ms: 1_000 };
+
+		// In sight all along: every report counts.
+		expect(sight.counts(second)).toBe(true);
+
+		// Scrolled out of view: no frames come, and nothing that arrives is counted.
+		sight.seen(false);
+		clock += 20_000;
+		expect(sight.counts(second)).toBe(false);
+
+		// Back in view. The first report reaches back across the time away: one very long
+		// wait that was nobody's slow frame.
+		sight.seen(true);
+		clock += 400;
+		expect(sight.counts({ ms: 20_900 })).toBe(false);
+
+		// The next is of frames drawn in sight, and counts again.
+		clock += 1_300;
+		expect(sight.counts(second)).toBe(true);
 	});
 });

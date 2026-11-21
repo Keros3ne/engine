@@ -23,6 +23,7 @@ Created: 2026-11-19
 		type GameSite,
 		type HostedGame
 	} from "./bridge.svelte.ts";
+	import { createSight } from "./frame-rate.ts";
 	import type { RoundMessage } from "./protocol.ts";
 	import { SHAPE_RATIO, fitIn, viewFor, type Shape } from "./shapes.ts";
 
@@ -78,6 +79,32 @@ Created: 2026-11-19
 	/** How large the frame is: the view's shape, as large as fits the room. */
 	const size = $derived(room.width ? fitIn(view, room) : null);
 
+	/**
+	 * Whether the game's frame is in sight: on the screen, in a tab that is shown. A browser
+	 * gives a page that is not in sight no frames, which the game would report as one very
+	 * slow one (./frame-rate.ts).
+	 */
+	const sight = createSight();
+
+	/** Follows whether the frame is in sight, for as long as it is on the page. */
+	function watchSight(frame: HTMLIFrameElement) {
+		let onScreen = true;
+		const say = () => sight.seen(onScreen && document.visibilityState === "visible");
+
+		const watcher = new IntersectionObserver(([entry]) => {
+			onScreen = entry.isIntersecting;
+			say();
+		});
+		watcher.observe(frame);
+		document.addEventListener("visibilitychange", say);
+		say();
+
+		return () => {
+			watcher.disconnect();
+			document.removeEventListener("visibilitychange", say);
+		};
+	}
+
 	// The page makes this component again for each game, so reading these once is right.
 	// svelte-ignore state_referenced_locally
 	const bridge = createGameBridge(game, site, {
@@ -86,7 +113,8 @@ Created: 2026-11-19
 		view: "wide",
 		reducedMotion,
 		heard,
-		frames: onframes
+		// A report that reaches back into a time the frame was out of sight is not passed on.
+		frames: onframes && ((report) => sight.counts(report) && onframes(report))
 	});
 
 	$effect(() => {
@@ -141,6 +169,7 @@ Created: 2026-11-19
 		style:aspect-ratio={SHAPE_RATIO[view]}
 		{@attach bridge.attach}
 		{@attach follow}
+		{@attach watchSight}
 	></iframe>
 
 	<!-- A canvas says nothing to a screen reader, so the game says what happened in words. -->
